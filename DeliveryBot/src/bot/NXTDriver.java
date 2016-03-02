@@ -13,6 +13,7 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 
 import lejos.nxt.Button;
+import lejos.nxt.ButtonListener;
 import lejos.nxt.Motor;
 import lejos.nxt.MotorPort;
 import lejos.nxt.NXTRegulatedMotor;
@@ -30,7 +31,7 @@ public class NXTDriver {
 	public static NXTConnection btConn;
 	private static ArrayList<Waypoint> intersections = new ArrayList<Waypoint>(10);
 	private static ArrayList<Waypoint> offices = new ArrayList<Waypoint>(10);
-	private static BufferedReader in;
+	private static DataInputStream in;
 	
 	public static void main(String[] args) {
 		//initialize Navigator
@@ -43,12 +44,24 @@ public class NXTDriver {
 				MotorA, 
 				MotorB, 
 				true));
+		
+		Button.ESCAPE.addButtonListener(new ButtonListener() {
+			   public void buttonPressed(Button b) {
+			      System.exit(0);
+			   }
+
+			   public void buttonReleased(Button b) {
+			      // Nothing here
+			   }
+			});
+		
 //		UltrasonicSensor sonic = new UltrasonicSensor(SensorPort.S1);
 		System.out.println("Initializing..");
 		// initialize Bluetooth connection
 		try{
-			btConn = Bluetooth.waitForConnection(5000, btConn.RAW);
-			in = new BufferedReader(new InputStreamReader(btConn.openDataInputStream()));
+			btConn = Bluetooth.waitForConnection(15000, btConn.RAW);
+		//	in = new BufferedReader(new InputStreamReader(btConn.openInputStream()));
+			in = new DataInputStream(btConn.openDataInputStream());
 			System.out.println("Connected!");
 			startState();
 		}catch(NullPointerException e){
@@ -85,8 +98,7 @@ public class NXTDriver {
 			if(command != -1){
 				switch(command){
 					case 0: // Test BT
-						System.out.println("Connection Established!");
-						btConn.close();
+						bluetoothTest();
 						break;
 					case 1: // Record Waypoints
 						freeMove();
@@ -95,6 +107,15 @@ public class NXTDriver {
 						navigate();
 						break;
 					case 3: //exit
+						try {
+							in.close();
+							btConn.close();
+							
+						} catch (IOException e) {
+							// TODO Auto-generated catch block
+							//e.printStackTrace();
+						}
+						System.out.println("Goodbye!");
 						exit = true;
 				}
 			} else{
@@ -108,7 +129,7 @@ public class NXTDriver {
 	 * Freely move NXT around in order to record Waypoints
 	 */
 	public static void freeMove(){
-		int command = 0;
+		int command = -1;
 		boolean exit = false;
 		while(!exit){
 			command = 0;
@@ -120,7 +141,10 @@ public class NXTDriver {
 			}
 			
 			switch(command){
-			case 0: // nothing
+			case 0: // stop
+				nav.stop();
+				Motor.A.stop();
+				Motor.B.stop();
 				break;
 			case 1: // forward
 				nav.getMoveController().forward();
@@ -136,19 +160,23 @@ public class NXTDriver {
 				Motor.A.forward();
 				Motor.B.backward();
 				break;
-			case 5: // stop
-				nav.stop();
-				Motor.A.stop();
-				Motor.B.stop();
-				break;
-			case 6: // record intersection
+			case 5: // record intersection
 				intersections.add(getWaypoint());
 				break;
-			case 7: // record office
+			case 6: // record office
 				offices.add(getWaypoint());
 				break;
-			case 8: // exit
+			case 7: // exit
 				exit = true;
+				try {
+					in.close();
+					btConn.close();
+					
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					//e.printStackTrace();
+				}
+				System.out.println("Goodbye!");
 			}
 		}
 		// when done return to start state
@@ -167,5 +195,32 @@ public class NXTDriver {
 	 */
 	private static Waypoint getWaypoint(){
 		return new Waypoint(nav.getPoseProvider().getPose().getX(), nav.getPoseProvider().getPose().getY());
+	}
+	
+	private static void bluetoothTest(){
+		boolean exit = false;
+		int command = 1;
+		while(!exit){
+			try{
+				command = in.read();
+				if(command == 0|| command == -1){
+					exit = true;
+					try {
+						in.close();
+						btConn.close();
+					} catch (IOException e) {
+						// TODO Auto-generated catch block
+						//e.printStackTrace();
+					}
+					System.out.println("Goodbye!");
+				}else{
+					System.out.println(command);
+					Delay.msDelay(500);
+				}
+			
+			}catch(Exception e){
+				//no command read
+			}
+		}
 	}
 }
