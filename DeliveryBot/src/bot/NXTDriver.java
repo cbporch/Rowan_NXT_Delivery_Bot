@@ -14,6 +14,7 @@ import java.util.ArrayList;
 
 import lejos.nxt.Button;
 import lejos.nxt.ButtonListener;
+import lejos.nxt.LCD;
 import lejos.nxt.Motor;
 import lejos.nxt.MotorPort;
 import lejos.nxt.NXTRegulatedMotor;
@@ -32,11 +33,13 @@ public class NXTDriver {
 	private static ArrayList<Waypoint> intersections = new ArrayList<Waypoint>(10);
 	private static ArrayList<Waypoint> offices = new ArrayList<Waypoint>(10);
 	private static DataInputStream in;
+	private static NXTRegulatedMotor MotorA;
+	private static NXTRegulatedMotor MotorB;
 	
 	public static void main(String[] args) {
 		//initialize Navigator
-		NXTRegulatedMotor MotorA = new NXTRegulatedMotor(MotorPort.A);
-		NXTRegulatedMotor MotorB = new NXTRegulatedMotor(MotorPort.B);
+		MotorA = new NXTRegulatedMotor(MotorPort.A);
+		MotorB = new NXTRegulatedMotor(MotorPort.B);
 		nav = new Navigator(new DifferentialPilot
 				(MoveController.WHEEL_SIZE_NXT1, 
 				MoveController.WHEEL_SIZE_NXT1, 
@@ -47,11 +50,10 @@ public class NXTDriver {
 		
 		Button.ESCAPE.addButtonListener(new ButtonListener() {
 			   public void buttonPressed(Button b) {
-			      System.exit(0);
+				   System.exit(0);
 			   }
-
 			   public void buttonReleased(Button b) {
-			      // Nothing here
+				   System.exit(0);
 			   }
 			});
 		
@@ -59,11 +61,14 @@ public class NXTDriver {
 		System.out.println("Initializing..");
 		// initialize Bluetooth connection
 		try{
-			btConn = Bluetooth.waitForConnection(15000, btConn.RAW);
+			btConn = Bluetooth.waitForConnection(30000, btConn.RAW);
 		//	in = new BufferedReader(new InputStreamReader(btConn.openInputStream()));
 			in = new DataInputStream(btConn.openDataInputStream());
+			LCD.clear();
 			System.out.println("Connected!");
-			startState();
+			//startState();
+			freeMove();
+			
 		}catch(NullPointerException e){
 			System.out.println("No Connection");
 		}
@@ -75,7 +80,9 @@ public class NXTDriver {
 //		nav.addWaypoint(0,0,0);
 //		Button.waitForAnyPress();
 //		nav.followPath();
+		System.out.println("Press any button to exit.");
 		Button.waitForAnyPress();
+		closeConn();
 	}
 	
 	/*
@@ -88,13 +95,8 @@ public class NXTDriver {
 		System.out.println("Waiting..");
 		while(!exit){
 			command = -1;
-			Delay.msDelay(5000);
-				try {
-					command = in.read();
-				} catch (IOException e) {
-					//e.printStackTrace();
-					System.out.print("Error.");
-				}
+			Delay.msDelay(1000);
+			command = readBTInput();
 			if(command != -1){
 				switch(command){
 					case 0: // Test BT
@@ -107,18 +109,11 @@ public class NXTDriver {
 						navigate();
 						break;
 					case 3: //exit
-						try {
-							in.close();
-							btConn.close();
-							
-						} catch (IOException e) {
-							// TODO Auto-generated catch block
-							//e.printStackTrace();
-						}
-						System.out.println("Goodbye!");
 						exit = true;
+						System.out.println("Goodbye!");
+						break;
 				}
-			} else{
+			} else {
 				//System.out.println("No Connection");
 				exit = true;
 			}
@@ -129,58 +124,53 @@ public class NXTDriver {
 	 * Freely move NXT around in order to record Waypoints
 	 */
 	public static void freeMove(){
-		int command = -1;
+		int command = 0;
 		boolean exit = false;
 		while(!exit){
-			command = 0;
-			try {
-				command = in.read();
-			} catch (IOException e) {
-				//e.printStackTrace();
-				System.out.print("Error.");
-			}
-			
+			//LCD.clear();
+			command = readBTInput();
+			System.out.println(command);
 			switch(command){
-			case 0: // stop
-				nav.stop();
-				Motor.A.stop();
-				Motor.B.stop();
+			case 0: // stop forward or backward movement
+				MotorA.stop(true);
+				MotorB.stop(true);
 				break;
 			case 1: // forward
-				nav.getMoveController().forward();
+				MotorA.backward();
+				MotorB.backward();
 				break;
 			case 2: // backward
-				nav.getMoveController().backward();
+				MotorA.forward();
+				MotorB.forward();
 				break;
-			case 3: // left
-				Motor.A.backward();
-				Motor.B.forward();
+			case 3: // stop: left, right movement
+				MotorA.stop(true);
+				MotorB.stop(true);
 				break;
-			case 4: // right
-				Motor.A.forward();
-				Motor.B.backward();
+			case 4: // left
+				MotorA.backward();
+				MotorB.forward();
 				break;
-			case 5: // record intersection
+			case 5: // right
+				MotorA.forward();
+				MotorB.backward();
+				break;
+			case 6: // record intersection
 				intersections.add(getWaypoint());
 				break;
-			case 6: // record office
+			case 7: // record office
 				offices.add(getWaypoint());
 				break;
-			case 7: // exit
+			case 8: // exit
 				exit = true;
-				try {
-					in.close();
-					btConn.close();
-					
-				} catch (IOException e) {
-					// TODO Auto-generated catch block
-					//e.printStackTrace();
-				}
-				System.out.println("Goodbye!");
+			case -1:
+				exit = true;
+			default:
+				break;
 			}
 		}
 		// when done return to start state
-		startState();
+		//startState();
 	}
 
 	/* Determine which intersections, if any, must be traveled before
@@ -202,16 +192,10 @@ public class NXTDriver {
 		int command = 1;
 		while(!exit){
 			try{
-				command = in.read();
+				command = readBTInput();
 				if(command == 0|| command == -1){
 					exit = true;
-					try {
-						in.close();
-						btConn.close();
-					} catch (IOException e) {
-						// TODO Auto-generated catch block
-						//e.printStackTrace();
-					}
+					closeConn();
 					System.out.println("Goodbye!");
 				}else{
 					System.out.println(command);
@@ -222,5 +206,52 @@ public class NXTDriver {
 				//no command read
 			}
 		}
+	}
+	
+	private static int readBTInput(){
+		try {
+			//Delay.msDelay(60);
+			return in.read();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			System.out.print("Read Error");
+			return 0;
+		}
+	}
+	
+	private static void closeConn(){
+		if(in != null){
+			try {
+				in.close();
+				btConn.close();
+			} catch (IOException e) {
+				
+			}
+		}
+	}
+	
+	private static void test(){
+		nav.getMoveController().forward();
+		Delay.msDelay(2000);
+		nav.stop();
+		Delay.msDelay(2000);
+		nav.getMoveController().backward();
+		Delay.msDelay(2000);
+		nav.stop();
+		Delay.msDelay(2000);
+		Motor.A.backward();
+		Motor.B.forward();
+		Delay.msDelay(2000);
+		Motor.A.stop(true);
+		Motor.B.stop(true);
+		Delay.msDelay(2000);
+		Motor.B.backward();
+		Motor.A.forward();
+		Delay.msDelay(2000);
+		Motor.A.stop(true);
+		Motor.B.stop(true);
+		Delay.msDelay(2000);
+		System.exit(0);
+		
 	}
 }
