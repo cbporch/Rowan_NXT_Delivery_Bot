@@ -35,7 +35,7 @@ public class NXTDriver {
 		MotorA = new NXTRegulatedMotor(MotorPort.A);
 		MotorB = new NXTRegulatedMotor(MotorPort.B);
 		nav = new Navigator(new DifferentialPilot(MoveController.WHEEL_SIZE_NXT1, MoveController.WHEEL_SIZE_NXT1, 13.75,
-				MotorA, MotorB, true));
+				MotorA, MotorB, false));
 
 		Button.ESCAPE.addButtonListener(new ButtonListener() {
 			public void buttonPressed(Button b) {
@@ -98,7 +98,7 @@ public class NXTDriver {
 				case 2: // Select Waypoints, travel
 					navigate();
 					break;
-				case 3: // exit
+				case -1: // exit
 					exit = true;
 					System.out.println("Goodbye!");
 					break;
@@ -116,20 +116,19 @@ public class NXTDriver {
 	public static void freeMove() {
 		int command = 0;
 		boolean exit = false;
-		long start = System.currentTimeMillis();
+//		long start = System.currentTimeMillis();
 		while (!exit) {
-			// LCD.clear();
 			command = readBTInput();
-			//System.out.println(command);
 			
-			if((System.currentTimeMillis() - start) > 5000) {
-				sendXYBT();
-				start = System.currentTimeMillis();
-			}
+//			System.out.println(command);
+//			if((System.currentTimeMillis() - start) > 5000) {
+//				sendXYBT();
+//				start = System.currentTimeMillis();
+//			}
 			
 			switch (command) {
 				case 0: // stop forward or backward movement
-				case 3:
+				case 3: //
 					MotorA.stop(true);
 					MotorB.stop(true);
 					break;
@@ -155,9 +154,10 @@ public class NXTDriver {
 				case 7: // record office
 					offices.add(getWaypoint());
 					break;
-				case 8: // exit
-					exit = true;
-				case -1:
+				case 8: // send current x and y
+					sendXYBT();
+					break;
+				case -1:// exit
 					exit = true;
 				default:
 					break;
