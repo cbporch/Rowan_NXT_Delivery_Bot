@@ -11,6 +11,7 @@ import lejos.nxt.LCD;
 import lejos.nxt.Motor;
 import lejos.nxt.MotorPort;
 import lejos.nxt.NXTRegulatedMotor;
+import lejos.nxt.Sound;
 import lejos.nxt.comm.Bluetooth;
 import lejos.nxt.comm.NXTConnection;
 import lejos.robotics.navigation.DifferentialPilot;
@@ -35,7 +36,7 @@ public class NXTDriver {
 		MotorA = new NXTRegulatedMotor(MotorPort.A);
 		MotorB = new NXTRegulatedMotor(MotorPort.B);
 		nav = new Navigator(new DifferentialPilot(MoveController.WHEEL_SIZE_NXT1, MoveController.WHEEL_SIZE_NXT1, 13.75,
-				MotorA, MotorB, false));
+				MotorA, MotorB, true));
 
 		Button.ESCAPE.addButtonListener(new ButtonListener() {
 			public void buttonPressed(Button b) {
@@ -48,7 +49,8 @@ public class NXTDriver {
 		});
 
 		// UltrasonicSensor sonic = new UltrasonicSensor(SensorPort.S1);
-		System.out.println("Initializing..");
+		System.out.println("\n\n\nInitializing..");
+		
 		// initialize Bluetooth connection
 		try {
 			btConn = Bluetooth.waitForConnection(60000, btConn.RAW);
@@ -56,123 +58,97 @@ public class NXTDriver {
 			out = new DataOutputStream(btConn.openOutputStream());
 			LCD.clear();
 			System.out.println("Connected!");
-			// startState();
-			freeMove();
-
+			Sound.beepSequenceUp();
+			selectState();
+			
+			//insert code here to attempt to reconnect to bluetooth?
+			
 		} catch (NullPointerException e) {
 			System.out.println("No Connection");
 		}
-
-		// add waypoints
-		// nav.addWaypoint(20,0);
-		// nav.addWaypoint(20, 20);
-		// nav.addWaypoint(0, 20);
-		// nav.addWaypoint(0,0,0);
-		// Button.waitForAnyPress();
-		// nav.followPath();
 		System.out.println("Press any button to exit.");
 		Button.waitForAnyPress();
 		closeConn();
 	}
 
 	/*
-	 * Default state
-	 */
-	public static void startState() {
-		int command = -1;
-		boolean exit = false;
-		System.out.println("NXT Delivery Bot");
-		System.out.println("Waiting..");
-		while (!exit) {
-			command = -1;
-			Delay.msDelay(1000);
-			command = readBTInput();
-			if (command != -1) {
-				switch (command) {
-				case 0: // Test BT
-					bluetoothTest();
-					break;
-				case 1: // Record Waypoints
-					freeMove();
-					break;
-				case 2: // Select Waypoints, travel
-					navigate();
-					break;
-				case -1: // exit
-					exit = true;
-					System.out.println("Goodbye!");
-					break;
-				}
-			} else {
-				// System.out.println("No Connection");
-				exit = true;
-			}
-		}
-	}
-
-	/*
 	 * Freely move NXT around in order to record Waypoints
 	 */
-	public static void freeMove() {
+	public static void selectState() {
 		int command = 0;
 		boolean exit = false;
-//		long start = System.currentTimeMillis();
 		while (!exit) {
 			command = readBTInput();
 			
-//			System.out.println(command);
-//			if((System.currentTimeMillis() - start) > 5000) {
-//				sendXYBT();
-//				start = System.currentTimeMillis();
-//			}
+			System.out.println(command);
 			
 			switch (command) {
 				case 0: // stop forward or backward movement
-				case 3: //
 					MotorA.stop(true);
 					MotorB.stop(true);
 					break;
 				case 1: // forward
-					MotorA.backward();
-					MotorB.backward();
+					MotorA.forward();
+					MotorB.forward();
 					break;
 				case 2: // backward
-					MotorA.forward();
-					MotorB.forward();
-					break;
-				case 4: // left
 					MotorA.backward();
-					MotorB.forward();
+					MotorB.backward();
 					break;
-				case 5: // right
+				case 3: // left
 					MotorA.forward();
 					MotorB.backward();
 					break;
-				case 6: // record intersection
-					intersections.add(getWaypoint());
+				case 4: // right
+					MotorA.backward();
+					MotorB.forward();
 					break;
-				case 7: // record office
-					offices.add(getWaypoint());
+				case 5: // send current x and y
+					sendCoordinatesBT();
 					break;
-				case 8: // send current x and y
-					sendXYBT();
+				case 6: // receive Coordinates
+					receiveCoordinates();
 					break;
-				case -1:// exit
+				case -1:// connection closed or lost
 					exit = true;
+					break;
 				default:
 					break;
 			}
 		}
-		// when done return to start state
-		// startState();
 	}
 
 	/*
-	 * Determine which intersections, if any, must be traveled before reaching
-	 * endpoint, add to Waypoints
+	 * Receive Coordinates from Bluetooth connection, add them to a path,
+	 * then follow it
 	 */
-	public static void navigate() {
+	private static void receiveCoordinates() {
+		int command = readBTInput();
+		boolean exit = false;
+		while(!exit){
+			switch(command){
+			case -1: //connection lost or closed
+				closeConn();
+				break;
+			case 0: // receive coordinates
+				//receive x,y,heading floats from Bluetooth
+				while(command != -2){
+					float x = readBTInput(), 
+							y = readBTInput(), 
+							heading = readBTInput();
+					nav.addWaypoint(x, y, heading);
+				}
+				nav.followPath();
+				
+				// return to start?
+				
+				exit = true;
+				break;
+		}
+		
+		}
 	}
+	
 
 	/*
 	 * Returns a Waypoint object for the current pose
@@ -213,18 +189,18 @@ public class NXTDriver {
 		}
 	}
 
-	private static void sendXYBT() {
+	private static void sendCoordinatesBT() {
 		Pose p = nav.getPoseProvider().getPose();
-		float x = p.getX(), y = p.getY();
+		float x = p.getX(), y = p.getY(), heading = p.getHeading();
 		try {
-			String output = Float.toString(x) +"\n"+Float.toString(y)+"\n";
+			String output = Float.toString(x) +"\n"+Float.toString(y)+"\n"+Float.toString(heading);
+			System.out.println("("+x+","+y+","+heading+")");
 			out.writeBytes(output);
 			out.flush();
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
-			e.printStackTrace();
+			//e.printStackTrace();
 		}
-		
 	}
 	
 	private static void closeConn() {
