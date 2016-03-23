@@ -107,7 +107,10 @@ public class NXTDriver {
 					sendCoordinatesBT();
 					break;
 				case 6: // receive Coordinates
-					receiveCoordinates();
+					command = receiveCoordinates();
+					if(command == -1){
+						exit = true;
+					}
 					break;
 				case -1:// connection closed or lost
 					exit = true;
@@ -122,31 +125,19 @@ public class NXTDriver {
 	 * Receive Coordinates from Bluetooth connection, add them to a path,
 	 * then follow it
 	 */
-	private static void receiveCoordinates() {
+	private static int receiveCoordinates() {
 		int command = readBTInput();
-		boolean exit = false;
-		while(!exit){
-			switch(command){
-			case -1: //connection lost or closed
-				closeConn();
-				break;
-			case 0: // receive coordinates
-				//receive x,y,heading floats from Bluetooth
-				while(command != -2){
-					float x = readBTInput(), 
-							y = readBTInput(), 
-							heading = readBTInput();
-					nav.addWaypoint(x, y, heading);
-				}
-				nav.followPath();
-				
-				// return to start?
-				
-				exit = true;
-				break;
-		}
-		
-		}
+			while(command != -2 || command!= -1){
+				float x = readBTInput(), 
+						y = readBTInput(), 
+						heading = readBTInput();
+				nav.addWaypoint(x, y, heading);
+			}
+			if (command == -1)
+				return command;
+			nav.followPath();
+			// return to start
+			return 0;
 	}
 	
 
@@ -190,10 +181,11 @@ public class NXTDriver {
 	}
 
 	private static void sendCoordinatesBT() {
+		Delay.msDelay(500);
 		Pose p = nav.getPoseProvider().getPose();
 		float x = p.getX(), y = p.getY(), heading = p.getHeading();
 		try {
-			String output = Float.toString(x) +"\n"+Float.toString(y)+"\n"+Float.toString(heading);
+			String output = Float.toString(x) +"\n"+Float.toString(y)+"\n"+Float.toString(heading)+"\n";
 			System.out.println("("+x+","+y+","+heading+")");
 			out.writeBytes(output);
 			out.flush();
