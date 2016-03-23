@@ -49,26 +49,31 @@ public class NXTDriver {
 		});
 
 		// UltrasonicSensor sonic = new UltrasonicSensor(SensorPort.S1);
-		System.out.println("\n\n\nInitializing..");
+		System.out.println("\n\nInitializing..");
 		
 		// initialize Bluetooth connection
+		openConn();
+		selectState();
+		closeConn();
+		
+		//insert code here to attempt to reconnect to bluetooth?
+		
+		System.out.println("Press any button to exit.");
+		Button.waitForAnyPress();
+		
+	}
+	
+	public static void openConn(){
 		try {
 			btConn = Bluetooth.waitForConnection(60000, btConn.RAW);
 			in = new DataInputStream(btConn.openDataInputStream());
 			out = new DataOutputStream(btConn.openOutputStream());
 			LCD.clear();
-			System.out.println("Connected!");
+			System.out.println("Connected to the best phone ever!");
 			Sound.beepSequenceUp();
-			selectState();
-			
-			//insert code here to attempt to reconnect to bluetooth?
-			
 		} catch (NullPointerException e) {
 			System.out.println("No Connection");
 		}
-		System.out.println("Press any button to exit.");
-		Button.waitForAnyPress();
-		closeConn();
 	}
 
 	/*
@@ -79,9 +84,7 @@ public class NXTDriver {
 		boolean exit = false;
 		while (!exit) {
 			command = readBTInput();
-			
-			System.out.println(command);
-			
+			System.out.println(command);			
 			switch (command) {
 				case 0: // stop forward or backward movement
 					MotorA.stop(true);
@@ -112,7 +115,7 @@ public class NXTDriver {
 						exit = true;
 					}
 					break;
-				case -1:// connection closed or lost
+				case -1:// connection  lost
 					exit = true;
 					break;
 				default:
@@ -136,6 +139,10 @@ public class NXTDriver {
 			if (command == -1)
 				return command;
 			nav.followPath();
+			while(nav.isMoving()){
+				//check ultrasonic sensor
+				
+			}
 			// return to start
 			return 0;
 	}
@@ -200,6 +207,7 @@ public class NXTDriver {
 				in.close();
 				out.close();
 				btConn.close();
+				Sound.buzz();
 		} catch (IOException e) {
 		}
 	}
