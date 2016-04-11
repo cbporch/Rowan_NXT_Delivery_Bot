@@ -10,14 +10,18 @@ import lejos.nxt.LCD;
 import lejos.nxt.Motor;
 import lejos.nxt.MotorPort;
 import lejos.nxt.NXTRegulatedMotor;
+import lejos.nxt.SensorPort;
 import lejos.nxt.Sound;
+import lejos.nxt.addon.CompassHTSensor;
 import lejos.nxt.comm.Bluetooth;
 import lejos.nxt.comm.NXTConnection;
-import lejos.robotics.navigation.MoveController;
+import lejos.robotics.navigation.CompassPilot;
+import lejos.robotics.navigation.DifferentialPilot;
 import lejos.robotics.navigation.Navigator;
 import lejos.robotics.navigation.Pose;
 import lejos.util.Delay;
 
+@SuppressWarnings("deprecation")
 public class NXTDriver {
 	public static Navigator nav;
 	public static NXTConnection btConn;
@@ -30,45 +34,47 @@ public class NXTDriver {
 		// initialize Navigator
 		MotorA = new NXTRegulatedMotor(MotorPort.A);
 		MotorB = new NXTRegulatedMotor(MotorPort.B);
-		DiffPilot pilot = new DiffPilot(MoveController.WHEEL_SIZE_RCX, 13.5, MotorA, MotorB, false);
+		DifferentialPilot pilot = new DifferentialPilot(2.58, 16.9, MotorA, MotorB, false);
+//		@SuppressWarnings("deprecation")
+//		CompassPilot c_pilot = new CompassPilot((DirectionFinder) SensorPort.S1, 0, 0, MotorA, MotorB, false);
 		nav = new Navigator(pilot);
-		
-		pilot.setAcceleration(250, 256);
-		pilot.setTravelSpeed(30, 30);
-//		MotorA.setAcceleration(256);
-//		MotorB.setAcceleration(250);
-//		MotorA.setSpeed(30);
-//		MotorB.setSpeed(15);
+		setMotorSpeeds();
 		Button.ESCAPE.addButtonListener(new ButtonListener() {
-			public void buttonPressed(Button b) {
-				System.exit(0);
-			}
-
-			public void buttonReleased(Button b) {
-				System.exit(0);
-			}
+			public void buttonPressed(Button b) {System.exit(0);}
+			public void buttonReleased(Button b) {System.exit(0);}
 		});
 
-		// UltrasonicSensor sonic = new UltrasonicSensor(SensorPort.S1);
 		System.out.println("\n\nInitializing..");
 
 		// initialize Bluetooth connection
 		if(openConn()){
+//			c_pilot.calibrate();
+//			Delay.msDelay(20000);
 			selectState();
 			closeConn();
 		}
 		
-
 		// insert code here to attempt to reconnect to bluetooth?
-
 		System.out.println("Press any button to exit.");
 		Button.waitForAnyPress();
-
+		
 	}
 
+	/*
+	 * Sets individual motor speeds
+	 */
+	private static void setMotorSpeeds() {
+		MotorA.setSpeed(18);
+		MotorB.setSpeed(20);
+		
+	}
+
+	/*
+	 * Establishes Bluetooth input and output connections
+	 */
 	public static boolean openConn() {
 		try {
-			btConn = Bluetooth.waitForConnection(60000, btConn.RAW);
+			btConn = Bluetooth.waitForConnection(60000, NXTConnection.RAW);
 			in = new DataInputStream(btConn.openDataInputStream());
 			out = new DataOutputStream(btConn.openOutputStream());
 			LCD.clear();
@@ -81,6 +87,9 @@ public class NXTDriver {
 		}
 	}
 
+	/*
+	 * Closes all bluetooth connections
+	 */
 	private static void closeConn() {
 		try {
 			in.close();
@@ -100,6 +109,7 @@ public class NXTDriver {
 		boolean exit = false;
 		while (!exit) {
 			command = readBTInput();
+			setMotorSpeeds();
 			// System.out.println(command);
 			switch (command) {
 			case 0: // stop forward or backward movement
@@ -108,13 +118,9 @@ public class NXTDriver {
 				nav.stop();
 				break;
 			case 1: // forward
-				// MotorA.forward();
-				// MotorB.forward();
 				nav.getMoveController().forward();
 				break;
 			case 2: // backward
-				// MotorA.backward();
-				// MotorB.backward();
 				nav.getMoveController().backward();
 				break;
 			case 3: // left
@@ -156,15 +162,9 @@ public class NXTDriver {
 			System.out.println("Waypoint Added");
 			command = readBTInput();
 		}
-		// if (command == -1){
-		// return command;
-		// }
 		System.out.println("Coord. Received");
+		setMotorSpeeds();
 		nav.followPath();
-		// while(nav.isMoving()){
-		// check ultrasonic sensor
-		// }
-		// return to start
 		return 0;
 	}
 
@@ -174,14 +174,13 @@ public class NXTDriver {
 			System.out.print(out + " ");
 			return out;
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			System.out.print("Read Error");
 			return -1;
 		}
 	}
 
 	private static void sendCoordinatesBT() {
-		Delay.msDelay(50);
+//		Delay.msDelay(50);
 		Pose p = nav.getPoseProvider().getPose();
 		float x = p.getX(), y = p.getY(), heading = p.getHeading();
 		try {
@@ -190,11 +189,11 @@ public class NXTDriver {
 			out.writeBytes(output);
 			out.flush();
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			// e.printStackTrace();
 		}
 	}
 
+	@SuppressWarnings("unused")
 	private static void test() {
 		nav.getMoveController().forward();
 		Delay.msDelay(2000);
@@ -220,6 +219,7 @@ public class NXTDriver {
 
 	}
 
+	@SuppressWarnings("unused")
 	private static void bluetoothTest() {
 		boolean exit = false;
 		int command = 1;
