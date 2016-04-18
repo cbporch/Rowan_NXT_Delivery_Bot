@@ -3,7 +3,9 @@ package bot;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 
+import lejos.geom.Point;
 import lejos.nxt.Button;
 import lejos.nxt.ButtonListener;
 import lejos.nxt.LCD;
@@ -21,6 +23,7 @@ import lejos.robotics.navigation.CompassPilot;
 import lejos.robotics.navigation.DifferentialPilot;
 import lejos.robotics.navigation.Navigator;
 import lejos.robotics.navigation.Pose;
+import lejos.robotics.navigation.Waypoint;
 import lejos.robotics.pathfinding.Path;
 import lejos.util.Delay;
 
@@ -39,8 +42,8 @@ public class NXTDriver {
 
 	public static void main(String[] args) {
 		// initialize Navigator
-		_carpetTrackWidth = 15;
-		_tileTrackWidth = 16;
+		_carpetTrackWidth = 15.0f;
+		_tileTrackWidth = 15.86f;
 
 		MotorA = new NXTRegulatedMotor(MotorPort.A);
 		MotorB = new NXTRegulatedMotor(MotorPort.B);
@@ -67,13 +70,15 @@ public class NXTDriver {
 			// nav.goTo(0, 0, 0);
 
 			compass.startCalibration();
-			pilot.setRotateSpeed(18);
+			pilot.setRotateSpeed(15);
 			pilot.rotate(720, true);
 			while (pilot.isMoving()) {
 			} // wait
 			compass.stopCalibration();
+			Delay.msDelay(100);
 			compass.resetCartesianZero();
-			// testCompass();
+			Delay.msDelay(100);
+			//testCompass();
 
 			selectState();
 			closeConn();
@@ -188,6 +193,7 @@ public class NXTDriver {
 	 */
 	private static int receiveCoordinates() {
 		int command = 1;
+		ArrayList<Waypoint> waypoints = new ArrayList<Waypoint>();
 		System.out.println("Receiving Coordinates");
 		if (nav.isMoving()) {
 			nav.clearPath();
@@ -195,35 +201,45 @@ public class NXTDriver {
 		while (command > 0) {
 			int x = readBTInput(), y = readBTInput(), heading = readBTInput();
 			System.out.println();
-			nav.addWaypoint(x, y);
+			waypoints.add(new Waypoint(x,y,heading));
+//			nav.addWaypoint(x, y);
 			System.out.println("Waypoint Added");
 			command = readBTInput();
 		}
 		// System.out.println("Coord. Received");
 		setMotorSpeeds();
-
-		nav.followPath();
-		do {
-			PoseProvider p = nav.getPoseProvider();
-			Pose pose = p.getPose();
-			pose.setHeading(compass.getDegreesCartesian());
-			p.setPose(pose);
-			nav.setPoseProvider(p);
-		} while (nav.isMoving());
+		navigate(waypoints);
+//		nav.followPath();
+//		do {
+//			PoseProvider p = nav.getPoseProvider();
+//			Pose pose = p.getPose();
+//			pose.setHeading(compass.getDegreesCartesian());
+//			p.setPose(pose);
+//			nav.setPoseProvider(p);
+//		} while (nav.isMoving());
 		return 0;
 	}
+	private static void navigate(ArrayList<Waypoint> waypoints){
+		for(Waypoint w:waypoints){
+			compassRotate(nav.getPoseProvider().getPose().angleTo(new Point((float) w.getX(), (float) w.getY())));
+			nav.goTo(new Waypoint(w.getX(), w.getY()));
+			nav.waitForStop();
+			
+		}
+	}
 	
-	private static void compassRotate(float heading){
-		//while (true) {
-			PoseProvider p = nav.getPoseProvider();
+	private static void compassRotate(double heading) {
+		PoseProvider p = nav.getPoseProvider();
+		while ((compass.getDegreesCartesian() > (heading + 0.5)) && 
+				(compass.getDegreesCartesian() < (heading - 0.5))) {
+			p = nav.getPoseProvider();
 			p.getPose().setHeading(compass.getDegreesCartesian());
 			nav.setPoseProvider(p);
-			if (p.getPose().getHeading() > (heading +0.5) &&
-					p.getPose().getHeading() < (heading - 0.5)) {
+			if (p.getPose().getHeading() != heading) {
 				pilot.rotate(-(heading - compass.getDegreesCartesian()));
 				nav.waitForStop();
 			}
-		//}
+		}
 	}
 
 	private static int readBTInput() {
@@ -266,7 +282,6 @@ public class NXTDriver {
 			nav.setPoseProvider(p);
 			if (p.getPose().getHeading() != 90.0f) {
 				pilot.rotate(-(90 - compass.getDegreesCartesian()));
-				// nav.rotateTo(90.0f);
 				nav.waitForStop();
 			}
 		}
