@@ -66,21 +66,22 @@ public class NXTDriver {
 
 		// initialize Bluetooth connection
 		if (openConn()) {
-			// nav.goTo(0, 0, 180);
-			// nav.goTo(0, 0, 0);
-
 			compass.startCalibration();
-			pilot.setRotateSpeed(15);
+			pilot.setRotateSpeed(20);
 			pilot.rotate(720, true);
 			while (pilot.isMoving()) {
-			} // wait
+				//wait for completion
+			}
 			compass.stopCalibration();
-			Delay.msDelay(100);
+			Delay.msDelay(50);
+			nav.goTo(0, 0, 0);
 			compass.resetCartesianZero();
 			Delay.msDelay(100);
-			//testCompass();
+			
+			testCompassRotate();
 
 			selectState();
+			
 			closeConn();
 		}
 
@@ -206,8 +207,7 @@ public class NXTDriver {
 			System.out.println("Waypoint Added");
 			command = readBTInput();
 		}
-		// System.out.println("Coord. Received");
-		setMotorSpeeds();
+	setMotorSpeeds();
 		navigate(waypoints);
 //		nav.followPath();
 //		do {
@@ -224,19 +224,24 @@ public class NXTDriver {
 			compassRotate(nav.getPoseProvider().getPose().angleTo(new Point((float) w.getX(), (float) w.getY())));
 			nav.goTo(new Waypoint(w.getX(), w.getY()));
 			nav.waitForStop();
-			
 		}
 	}
 	
-	private static void compassRotate(double heading) {
-		PoseProvider p = nav.getPoseProvider();
-		while ((compass.getDegreesCartesian() > (heading + 0.5)) && 
+	private static void compassRotate(float heading) {
+		PoseProvider posePr = nav.getPoseProvider();
+		while ((compass.getDegreesCartesian() > (heading + 0.5)) || 
 				(compass.getDegreesCartesian() < (heading - 0.5))) {
-			p = nav.getPoseProvider();
-			p.getPose().setHeading(compass.getDegreesCartesian());
-			nav.setPoseProvider(p);
-			if (p.getPose().getHeading() != heading) {
-				pilot.rotate(-(heading - compass.getDegreesCartesian()));
+			Pose pose = posePr.getPose();
+			pose.setHeading(compass.getDegreesCartesian());
+			posePr.setPose(pose);
+			nav.setPoseProvider(posePr);
+			
+			if (posePr.getPose().getHeading() != heading) {
+				float turnDegrees = heading - compass.getDegreesCartesian();
+				if(turnDegrees < -180){
+					turnDegrees = 360 + turnDegrees;
+				}
+				pilot.rotate(-turnDegrees);
 				nav.waitForStop();
 			}
 		}
@@ -268,25 +273,41 @@ public class NXTDriver {
 	}
 
 	private static void testCompass() {
-		compass.startCalibration();
-		pilot.setRotateSpeed(18);
-		pilot.rotate(720, true);
-		Delay.msDelay(20000);
-		compass.stopCalibration();
-		compass.resetCartesianZero();
-		// float start = System.currentTimeMillis();
+		
 		while (true) {
-			System.out.println(compass.getDegreesCartesian());
-			PoseProvider p = nav.getPoseProvider();
-			p.getPose().setHeading(compass.getDegreesCartesian());
-			nav.setPoseProvider(p);
-			if (p.getPose().getHeading() != 90.0f) {
-				pilot.rotate(-(90 - compass.getDegreesCartesian()));
+			PoseProvider posePr = nav.getPoseProvider();
+			Pose pose = posePr.getPose();
+			pose.setHeading(compass.getDegreesCartesian());
+			posePr.setPose(pose);
+			nav.setPoseProvider(posePr);
+			
+			System.out.println(posePr.getPose().getHeading() +" vs. "+compass.getDegreesCartesian());
+			
+			if (posePr.getPose().getHeading() != 90.0f) {
+				float turnDegrees = 90 - compass.getDegreesCartesian();
+				if(turnDegrees < -180){
+					turnDegrees = 360 + turnDegrees;
+				}
+				pilot.rotate(-turnDegrees);
 				nav.waitForStop();
 			}
 		}
 	}
 
+	private static void testCompassRotate(){
+		do{
+			System.out.println("Start test");
+			compassRotate(0);
+			Sound.twoBeeps();
+			compassRotate(90);
+			Sound.twoBeeps();
+			compassRotate(180);
+			Sound.twoBeeps();
+			compassRotate(270);
+			Sound.twoBeeps();
+		}while(true);
+	}
+	
 	@SuppressWarnings("unused")
 	private static void test() {
 		nav.getMoveController().forward();
